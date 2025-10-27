@@ -1,0 +1,253 @@
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const BMICalculatorApp());
+}
+
+class BMICalculatorApp extends StatelessWidget {
+  const BMICalculatorApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'BMI Calculator',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: const BMICalculatorScreen(),
+    );
+  }
+}
+
+class BMICalculatorScreen extends StatefulWidget {
+  const BMICalculatorScreen({super.key});
+
+  @override
+  State<BMICalculatorScreen> createState() => _BMICalculatorScreenState();
+}
+
+class _BMICalculatorScreenState extends State<BMICalculatorScreen> {
+  final TextEditingController weightController = TextEditingController();
+  final TextEditingController heightController = TextEditingController();
+  final TextEditingController feetController = TextEditingController();
+  final TextEditingController inchController = TextEditingController();
+
+  String weightUnit = "kg";
+  String heightUnit = "cm";
+
+  double? bmi;
+  String category = "";
+  Color categoryColor = Colors.transparent;
+
+  void calculateBMI() {
+    try {
+      double weight;
+      double height;
+
+      // Validation check
+      if (weightController.text.isEmpty ||
+          (heightUnit != "ft+in" && heightController.text.isEmpty) ||
+          (heightUnit == "ft+in" &&
+              (feetController.text.isEmpty && inchController.text.isEmpty))) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please enter all required fields")),
+        );
+        return;
+      }
+
+      // Parse weight
+      weight = double.parse(weightController.text);
+      if (weight <= 0) throw Exception("Invalid weight");
+
+      // Convert to kg if lb
+      if (weightUnit == "lb") {
+        weight = weight * 0.453592;
+      }
+
+      // Height conversion
+      if (heightUnit == "cm") {
+        height = double.parse(heightController.text) / 100; // cm → m
+      } else if (heightUnit == "m") {
+        height = double.parse(heightController.text);
+      } else {
+        // feet + inch
+        double feet = double.tryParse(feetController.text) ?? 0;
+        double inch = double.tryParse(inchController.text) ?? 0;
+
+        // Auto carry inch → feet
+        if (inch >= 12) {
+          feet += (inch / 12).floor();
+          inch = inch % 12;
+        }
+
+        height = ((feet * 12) + inch) * 0.0254; // convert to meters
+      }
+
+      if (height <= 0) throw Exception("Invalid height");
+
+      // BMI calculation
+      double calculatedBMI = weight / (height * height);
+
+      setState(() {
+        bmi = calculatedBMI;
+        if (bmi! < 18.5) {
+          category = "Underweight";
+          categoryColor = Colors.blue;
+        } else if (bmi! < 25.0) {
+          category = "Normal";
+          categoryColor = Colors.green;
+        } else if (bmi! < 30.0) {
+          category = "Overweight";
+          categoryColor = Colors.orange;
+        } else {
+          category = "Obese";
+          categoryColor = Colors.red;
+        }
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Invalid input! Please check values.")),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("BMI Calculator")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Enter your weight:", style: TextStyle(fontSize: 18)),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: weightController,
+                    decoration: const InputDecoration(labelText: "Weight"),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ToggleButtons(
+                  isSelected: [weightUnit == "kg", weightUnit == "lb"],
+                  onPressed: (index) {
+                    setState(() {
+                      weightUnit = index == 0 ? "kg" : "lb";
+                    });
+                  },
+                  children: const [
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text("kg"),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text("lb"),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Text("Enter your height:", style: TextStyle(fontSize: 18)),
+            Row(
+              children: [
+                ToggleButtons(
+                  isSelected: [
+                    heightUnit == "cm",
+                    heightUnit == "m",
+                    heightUnit == "ft+in"
+                  ],
+                  onPressed: (index) {
+                    setState(() {
+                      if (index == 0) heightUnit = "cm";
+                      if (index == 1) heightUnit = "m";
+                      if (index == 2) heightUnit = "ft+in";
+                    });
+                  },
+                  children: const [
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10),
+                      child: Text("cm"),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10),
+                      child: Text("m"),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10),
+                      child: Text("ft+in"),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (heightUnit == "cm" || heightUnit == "m")
+              TextField(
+                controller: heightController,
+                decoration: InputDecoration(labelText: "Height ($heightUnit)"),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+              ),
+            if (heightUnit == "ft+in")
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: feetController,
+                      decoration: const InputDecoration(labelText: "Feet"),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: inchController,
+                      decoration: const InputDecoration(labelText: "Inches"),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 25),
+            Center(
+              child: ElevatedButton(
+                onPressed: calculateBMI,
+                child: const Text("Calculate BMI"),
+              ),
+            ),
+            const SizedBox(height: 25),
+            if (bmi != null)
+              Card(
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      Text("Your BMI: ${bmi!.toStringAsFixed(1)}",
+                          style: const TextStyle(
+                              fontSize: 22, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+                      Chip(
+                        label: Text(
+                          category,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        backgroundColor: categoryColor,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
