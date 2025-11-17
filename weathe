@@ -1,0 +1,207 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+void main() {
+  runApp(MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: WeatherApp(),
+  ));
+}
+
+class WeatherApp extends StatefulWidget {
+  @override
+  State<WeatherApp> createState() => _WeatherAppState();
+}
+
+class _WeatherAppState extends State<WeatherApp> {
+  final latController = TextEditingController();
+  final lonController = TextEditingController();
+
+  bool isLoading = false;
+  String? error;
+
+  Map<String, dynamic>? current;
+  List<dynamic>? hourly;
+  Map<String, dynamic>? daily;
+
+  Future<void> fetchWeather() async {
+    final lat = latController.text.trim();
+    final lon = lonController.text.trim();
+
+    if (lat.isEmpty || lon.isEmpty) {
+      setState(() => error = "Latitude & Longitude cannot be empty");
+      return;
+    }
+
+    try {
+      setState(() {
+        isLoading = true;
+        error = null;
+      });
+
+      final url =
+          "https://api.open-meteo.com/v1/forecast"
+          "?latitude=$lat&longitude=$lon"
+          "&current=temperature_2m,weather_code,wind_speed_10m"
+          "&hourly=temperature_2m,weather_code,wind_speed_10m"
+          "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset"
+          "&forecast_days=10"
+          "&timezone=Asia%2FDhaka";
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode != 200) {
+        setState(() => error = "Failed to fetch weather");
+        return;
+      }
+
+      final data = jsonDecode(response.body);
+
+      setState(() {
+        current = data['current'];
+        hourly = data['hourly']['temperature_2m'];
+        daily = data['daily'];
+      });
+    } catch (e) {
+      setState(() => error = "Something went wrong: $e");
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Weather App (Open-Meteo API)"),
+        backgroundColor: Colors.blue,
+      ),
+
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+
+            // Input Fields
+            TextField(
+              controller: latController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: "Latitude",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: lonController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: "Longitude",
+                border: OutlineInputBorder(),
+              ),
+            ),
+
+            SizedBox(height: 12),
+
+            ElevatedButton(
+              onPressed: fetchWeather,
+              child: Text("Fetch Weather"),
+            ),
+
+            SizedBox(height: 20),
+
+            if (isLoading)
+              Center(child: CircularProgressIndicator()),
+
+            if (error != null)
+              Text(
+                error!,
+                style: TextStyle(color: Colors.red, fontSize: 16),
+              ),
+
+            if (!isLoading && error == null && current != null)
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+
+                      // CURRENT WEATHER
+                      Text("Current Weather",
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
+                      Card(
+                        child: ListTile(
+                          title: Text("Temperature: ${current!['temperature_2m']}°C"),
+                          subtitle: Text(
+                              "Wind: ${current!['wind_speed_10m']} km/h"),
+                        ),
+                      ),
+
+                      SizedBox(height: 15),
+
+                      // HOURLY WEATHER
+                      Text("Hourly Temperature (Next 24 Hours)",
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 8),
+
+                      Container(
+                        height: 120,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: 24,
+                          itemBuilder: (context, index) {
+                            return Card(
+                              child: Container(
+                                width: 80,
+                                padding: EdgeInsets.all(8),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text("${hourly![index]}°C"),
+                                    SizedBox(height: 5),
+                                    Text("H+$index"),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+
+                      SizedBox(height: 20),
+
+                      // 10-DAY FORECAST
+                      Text("10-Day Forecast",
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
+
+                      ListView.builder(
+                        physics: NeverScrollableScrollPhysics(),
+                        shrinkWrap: true,
+                        itemCount: 10,
+                        itemBuilder: (context, index) {
+                          double max = daily!['temperature_2m_max'][index];
+                          double min = daily!['temperature_2m_min'][index];
+                          String date = daily!['time'][index];
+
+                          return Card(
+                            child: ListTile(
+                              title: Text("$date"),
+                              subtitle: Text("High: $max°C   Low: $min°C"),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
